@@ -1,7 +1,7 @@
 #!/bin/bash
 # =============================================================================
 # E-Voting Compilation and Hash Generation Script
-# Version: 1.5.4.2
+# Version: 1.5.4.3
 # =============================================================================
 #
 # PURPOSE
@@ -53,11 +53,14 @@ set -uo pipefail
 EVOTING_FOLDER="${HOME}/evoting"
 EVOTING_SOURCE="${EVOTING_FOLDER}/evsource"
 
+# Log file – all output is written here as well as to the terminal
+LOG_FILE="${EVOTING_FOLDER}/$(date '+%Y%m%d_%H%M')_build.log"
+
 # Canton identifier used in the hash report filename
 CANTON="TG"
 
 # E-Voting release
-EV_RELEASE=1.5.4.2
+EV_RELEASE="1.5.4.3"
 
 # Tool versions
 JAVA_VERSION="25.0.3+9"
@@ -72,12 +75,12 @@ DOCKER_REGISTRY="registry.gitlab.com/swisspost-evoting/e-voting/evoting-e2e-dev"
 # The branch name matches the release tag of that component.
 REPOSITORIES=(
     "e-voting-${EV_RELEASE}             git@gitlab.com:swisspost-evoting/e-voting/e-voting.git"
-    "e-voting-libraries-1.5.3.1   git@gitlab.com:swisspost-evoting/e-voting/e-voting-libraries.git"
+    "e-voting-libraries-1.5.3.2   git@gitlab.com:swisspost-evoting/e-voting/e-voting-libraries.git"
     "crypto-primitives-ts-1.5.3.0 git@gitlab.com:swisspost-evoting/crypto-primitives/crypto-primitives-ts.git"
     "crypto-primitives-1.5.3.0    git@gitlab.com:swisspost-evoting/crypto-primitives/crypto-primitives.git"
-    "data-integration-service-2.9.4.1 git@gitlab.com:swisspost-evoting/e-voting/data-integration-service.git"
-    "verifier-1.6.3.1             git@gitlab.com:swisspost-evoting/verifier/verifier.git"
-    "pdf-verification-service-1.5.3.1 git@gitlab.com:swisspost-evoting/e-voting/pdf-verification-service.git"
+    "data-integration-service-2.9.4.2 git@gitlab.com:swisspost-evoting/e-voting/data-integration-service.git"
+    "verifier-1.6.3.2             git@gitlab.com:swisspost-evoting/verifier/verifier.git"
+    "pdf-verification-service-1.5.3.2 git@gitlab.com:swisspost-evoting/e-voting/pdf-verification-service.git"
     "testdata-1.5.3.0             git@gitlab.com:swisspost-evoting/e-voting/testdata.git"
 )
 
@@ -214,17 +217,17 @@ download_tools() {
     _create_directories
 
     echo "    Downloading JDK ${JAVA_VERSION}..."
-    wget -c "https://github.com/adoptium/temurin25-binaries/releases/download/${JAVA_TAG}/OpenJDK25U-jdk_x64_linux_hotspot_${JAVA_VERSION/+/_}.tar.gz" -O - \
+    curl -fL --progress-bar "https://github.com/adoptium/temurin25-binaries/releases/download/${JAVA_TAG}/OpenJDK25U-jdk_x64_linux_hotspot_${JAVA_VERSION/+/_}.tar.gz" \
         | tar -xz --strip-components=1 -C "${EVOTING_FOLDER}/tools/java" \
         || log_error "${BASH_LINENO[0]}" "$?"
 
     echo "    Downloading Node.js ${NODE_VERSION}..."
-    wget -c "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-x64.tar.gz" -O - \
+    curl -fL --progress-bar "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-x64.tar.gz" \
         | tar -xz --strip-components=1 -C "${EVOTING_FOLDER}/tools/node" \
         || log_error "${BASH_LINENO[0]}" "$?"
 
     echo "    Downloading Maven ${MAVEN_VERSION}..."
-    wget -c "https://archive.apache.org/dist/maven/maven-3/${MAVEN_VERSION}/binaries/apache-maven-${MAVEN_VERSION}-bin.tar.gz" -O - \
+    curl -fL --progress-bar "https://archive.apache.org/dist/maven/maven-3/${MAVEN_VERSION}/binaries/apache-maven-${MAVEN_VERSION}-bin.tar.gz" \
         | tar -xz --strip-components=1 -C "${EVOTING_FOLDER}/tools/maven" \
         || log_error "${BASH_LINENO[0]}" "$?"
 
@@ -267,6 +270,7 @@ clone_repositories() {
 compile_projects() {
     echo "==> Compiling projects..."
     _set_environment
+    _ensure_wine_prefix
 
     cd "${EVOTING_SOURCE}" || { log_error "${BASH_LINENO[0]}" "$?"; return; }
 
@@ -278,6 +282,7 @@ compile_projects() {
             -T 1.5C \
             -DskipHashGeneration \
             --no-transfer-progress \
+            -e \
             || log_error "${BASH_LINENO[0]}" "$?"
     done
 
@@ -403,6 +408,7 @@ generate_hashes() {
     # -----------------------------------------------------------------------
     {
         echo "Hash Report – ${timestamp}"
+        echo "E-Voting-System Release ${EV_RELEASE}"
         echo "Canton:  ${CANTON}"
         echo "System:  $(uname -a)"
         echo "========================================"
@@ -465,7 +471,7 @@ generate_hashes() {
         echo "${name_fc}"
         echo "${name_sdm}"
         echo "${name_vp}"
-        echo "rypto.ov-api.js"
+        echo "crypto.ov-api.js"
         echo "crypto.ov-worker.js"
         echo "index.html"
         echo "main.js"
@@ -581,7 +587,26 @@ _set_environment() {
     export MAVEN_HOME="${EVOTING_FOLDER}/tools/maven"
     export EVOTING_HOME="${EVOTING_SOURCE}"
     export DOCKER_REGISTRY="${DOCKER_REGISTRY}"
+    export WINEPREFIX="${EVOTING_FOLDER}/tools/wineprefix"
     path_append "${JAVA_HOME}/bin" "${MAVEN_HOME}/bin" "${NODE_HOME}" "${NODE_HOME}/bin"
+}
+# Ensures the wineprefix exists and matches the installed Wine version.
+# After a system Wine update the prefix must be migrated, otherwise the
+# secure-data-manager Windows package build fails. wineboot -u performs the
+# same migration winecfg triggers implicitly, but non-interactively.
+# Edge case: creating a *fresh* prefix is only silent if wine-mono is
+# available system-wide; otherwise Wine shows an interactive Mono dialog.
+_ensure_wine_prefix() {
+    if [[ ! -d "${WINEPREFIX}" ]] \
+        && ! ls /usr/share/wine/mono/* &>/dev/null \
+        && ! ls "${HOME}/.cache/wine/wine-mono-"* &>/dev/null; then
+        echo "    Warning: wine-mono not found system-wide. Initial prefix" >&2
+        echo "    creation may show an interactive Mono install dialog." >&2
+    fi
+    echo "    Updating wineprefix..."
+    WINEDEBUG=-all wineboot -u &>/dev/null \
+        || log_error "${BASH_LINENO[0]}" "$?"
+    wineserver -w
 }
 
 # ---------------------------------------------------------------------------
@@ -591,7 +616,7 @@ _set_environment() {
 main() {
     echo
     echo "======================================================"
-    echo "  E-Voting Build & Verification Script (v"{EV_RELEASE}")"
+    echo "  E-Voting Build & Verification Script (v${EV_RELEASE})"
     echo "======================================================"
     echo
     echo "Select one or more steps to execute."
@@ -667,5 +692,6 @@ main() {
 
     echo "All selected steps completed."
 }
-
+mkdir -p "${EVOTING_FOLDER}"
+exec > >(tee -a "${LOG_FILE}") 2>&1
 main
