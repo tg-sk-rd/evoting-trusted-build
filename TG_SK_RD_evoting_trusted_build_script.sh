@@ -1,7 +1,7 @@
 #!/bin/bash
 # =============================================================================
 # E-Voting Compilation and Hash Generation Script
-# Version: 1.5.4.3
+# Version: 1.6.2.1
 # =============================================================================
 #
 # PURPOSE
@@ -60,12 +60,12 @@ LOG_FILE="${EVOTING_FOLDER}/$(date '+%Y%m%d_%H%M')_build.log"
 CANTON="TG"
 
 # E-Voting release
-EV_RELEASE="1.5.4.3"
+EV_RELEASE="1.6.2.1"
 
 # Tool versions
-JAVA_VERSION="25.0.3+9"
-JAVA_TAG="jdk-25.0.3%2B9"            # URL-encoded form of the tag
-NODE_VERSION="22.22.2"
+JAVA_VERSION="25.0.4.1+1"
+JAVA_TAG="jdk-25.0.4.1%2B1"            # URL-encoded form of the tag
+NODE_VERSION="24.21.0"
 MAVEN_VERSION="3.9.11"
 
 # Docker registry used during compilation
@@ -75,13 +75,13 @@ DOCKER_REGISTRY="registry.gitlab.com/swisspost-evoting/e-voting/evoting-e2e-dev"
 # The branch name matches the release tag of that component.
 REPOSITORIES=(
     "e-voting-${EV_RELEASE}             git@gitlab.com:swisspost-evoting/e-voting/e-voting.git"
-    "e-voting-libraries-1.5.3.2   git@gitlab.com:swisspost-evoting/e-voting/e-voting-libraries.git"
-    "crypto-primitives-ts-1.5.3.0 git@gitlab.com:swisspost-evoting/crypto-primitives/crypto-primitives-ts.git"
-    "crypto-primitives-1.5.3.0    git@gitlab.com:swisspost-evoting/crypto-primitives/crypto-primitives.git"
-    "data-integration-service-2.9.4.2 git@gitlab.com:swisspost-evoting/e-voting/data-integration-service.git"
-    "verifier-1.6.3.2             git@gitlab.com:swisspost-evoting/verifier/verifier.git"
-    "pdf-verification-service-1.5.3.2 git@gitlab.com:swisspost-evoting/e-voting/pdf-verification-service.git"
-    "testdata-1.5.3.0             git@gitlab.com:swisspost-evoting/e-voting/testdata.git"
+    "e-voting-libraries-1.6.2.0   git@gitlab.com:swisspost-evoting/e-voting/e-voting-libraries.git"
+    "crypto-primitives-ts-1.6.2.0 git@gitlab.com:swisspost-evoting/crypto-primitives/crypto-primitives-ts.git"
+    "crypto-primitives-1.6.2.0    git@gitlab.com:swisspost-evoting/crypto-primitives/crypto-primitives.git"
+    "data-integration-service-2.10.2.0 git@gitlab.com:swisspost-evoting/e-voting/data-integration-service.git"
+    "verifier-1.7.2.1             git@gitlab.com:swisspost-evoting/verifier/verifier.git"
+    "pdf-verification-service-1.6.2.0 git@gitlab.com:swisspost-evoting/e-voting/pdf-verification-service.git"
+    "testdata-1.6.2.0             git@gitlab.com:swisspost-evoting/e-voting/testdata.git"
 )
 
 # Projects and their build order (Maven builds each with -f <name>)
